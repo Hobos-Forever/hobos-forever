@@ -1,6 +1,5 @@
 // pages/api/updateImage.ts
 
-import type { NextApiRequest, NextApiResponse } from "next";
 import dotenv from "dotenv";
 dotenv.config({ path: process.env.ENV_PATH || '.env.local' });
 import { Client } from "basic-ftp";
@@ -61,16 +60,29 @@ async function fetchNFTOnChainTraits(nftId: number): Promise<number[]> {
   }
 }
 
-// API route handler.
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+export async function handler(event: any, context: any) {
+  // Only allow POST requests.
+  if (event.httpMethod !== "POST") {
+    return {
+      statusCode: 405,
+      body: JSON.stringify({ error: "Method not allowed" }),
+    };
   }
-  const { tokenId } = req.body;
+
+  let body;
+  try {
+    body = JSON.parse(event.body);
+  } catch (err) {
+    return { statusCode: 400, body: JSON.stringify({ error: "Invalid request body" }) };
+  }
+  
+  const { tokenId } = body;
   if (!tokenId) {
-    return res.status(400).json({ error: "Missing tokenId" });
+    return { statusCode: 400, body: JSON.stringify({ error: "Missing tokenId" }) };
   }
+  
   console.log("Updating composite image for tokenId:", tokenId);
+
   try {
     // 1. Fetch updated metadata.
     const metadataUrl = `${METADATA_SERVER_URL}${FTP_METADATA_DIR}${tokenId}.json`;
@@ -152,13 +164,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log("Composite image uploaded successfully.");
     } catch (ftpErr) {
       console.error("FTP image upload error:", ftpErr);
-      return res.status(500).json({ error: "FTP upload failed", details: (ftpErr as Error).toString() });
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: "FTP upload failed", details: (ftpErr as Error).toString() }),
+      };
     } finally {
       client.close();
     }
-    res.status(200).json({ message: "Composite image updated successfully" });
+    
+    return {
+      statusCode: 202,
+      body: JSON.stringify({ message: "Composite image updated successfully" }),
+    };
   } catch (error) {
     console.error("Error updating composite image:", error);
-    res.status(500).json({ error: "Error updating composite image", details: (error as Error).toString() });
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: "Error updating composite image", details: (error as Error).toString() }),
+    };
   }
 }
