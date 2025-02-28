@@ -185,9 +185,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 body: JSON.stringify({ tokenId }),
             });
             if (!updateImageRes.ok) {
-                console.error("updateImage API error:", await updateImageRes.text());
+                console.log("Background function accepted the task.");
             } else {
-                console.log("updateImage API success:", await updateImageRes.json());
+              const text = await updateImageRes.text();
+              console.error("updateImage API error:", text);
             }
         } catch (err) {
             console.error("Error calling updateImage API:", err);
