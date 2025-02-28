@@ -179,7 +179,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         try {
             const baseUrl = process.env.BASE_URL || "http://localhost:3000";
-            const updateImageRes = await fetch(`${baseUrl}/netlify/functions/updateImage-background`, {
+            const updateImageRes = await fetch(`${baseUrl}.netlify/functions/updateImage-background`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ tokenId }),
