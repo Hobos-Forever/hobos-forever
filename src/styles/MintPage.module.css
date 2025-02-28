@@ -1,0 +1,35 @@
+body {
+  background-color: #121212;
+  color: white;
+}
+
+button {
+  font-weight: 600;
+}
+
+button.solid {
+  background-color: #3182ce;
+  color: white;
+}
+
+button.solid:hover {
+  background-color: #2b6cb0;
+}
+
+button.outline {
+  border-color: #3182ce;
+  color: #3182ce;
+}
+
+.card-container {
+  background-color: #1A1A1A;
+  border-radius: var(--chakra-radii-xl);
+}
+
+.number-input-field {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.number-input-field:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+}

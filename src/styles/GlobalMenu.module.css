@@ -1,0 +1,124 @@
+/* Navbar Container */
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #0D0F1A;
+  padding: 15px 40px;
+  border-bottom: 2px solid #444;
+  position: sticky;
+  top: 0;
+  width: 100%;
+  z-index: 1000;
+}
+
+/* Logo */
+.logo {
+  flex: 1;
+}
+
+.logo img {
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  object-fit: cover;
+}
+
+/* Burger Menu (Centered) */
+.burger {
+  display: none;
+  flex-direction: column;
+  cursor: pointer;
+  gap: 5px;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.burgerLine {
+  width: 30px;
+  height: 4px;
+  background-color: white;
+  transition: all 0.3s ease-in-out;
+}
+
+/* Animation for burger menu */
+.burger.open .burgerLine:nth-child(1) {
+  transform: rotate(45deg) translate(5px, 6px);
+}
+
+.burger.open .burgerLine:nth-child(2) {
+  opacity: 0;
+}
+
+.burger.open .burgerLine:nth-child(3) {
+  transform: rotate(-45deg) translate(5px, -6px);
+}
+
+/* Navigation Links (Hidden on mobile) */
+.navLinks {
+  list-style: none;
+  display: flex;
+  gap: 20px;
+  transition: all 0.3s ease-in-out;
+}
+
+.navLinks li {
+  display: inline-block;
+}
+
+.navLinks a {
+  text-decoration: none;
+  color: #ccc;
+  font-size: 18px;
+  transition: color 0.3s ease;
+  padding: 8px 12px;
+}
+
+.navLinks a:hover {
+  color: white;
+  border-bottom: 2px solid #FF9900;
+}
+
+/* Wallet Button */
+.wallet {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .burger {
+    display: flex;
+  }
+
+  .navLinks {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    background-color: #0D0F1A;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 0;
+    display: none;
+    border-top: 2px solid #444;
+  }
+
+  .navLinks.navActive {
+    display: flex;
+  }
+
+  .navLinks li {
+    width: 100%;
+    text-align: center;
+    padding: 10px 0;
+  }
+
+  .wallet {
+    justify-content: flex-end;
+    display: flex;
+  }
+}
