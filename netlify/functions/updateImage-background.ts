@@ -176,6 +176,7 @@ export async function handler(event: any, context: any) {
       statusCode: 202,
       body: JSON.stringify({ message: "Composite image updated successfully" }),
     };
+    window.location.reload();
   } catch (error) {
     console.error("Error updating composite image:", error);
     return {
