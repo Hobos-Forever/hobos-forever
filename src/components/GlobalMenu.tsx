@@ -30,7 +30,7 @@ export default function GlobalMenu() {
         <li><Link href="/" onClick={() => setIsOpen(false)}>Home</Link></li>
         <li><Link href="/mint" onClick={() => setIsOpen(false)}>Mint</Link></li>
         <li><Link href="/collection" onClick={() => setIsOpen(false)}>Collection</Link></li>
-        <li><Link href="/edit" onClick={() => setIsOpen(false)}>Edit NFTs</Link></li>
+        <li><Link href="/edit" onClick={() => setIsOpen(false)}>My Hobos</Link></li>
       </ul>
 
       {/* Wallet Button */}
