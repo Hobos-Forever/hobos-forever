@@ -332,7 +332,7 @@ export default function TraitManagementPage() {
         await callUpdateMetadata(selectedNFT.id, newName);
         toast({
           title: "Success",
-          description: "Metadata updated successfully.",
+          description: "Name updated successfully.",
           status: "success",
           duration: 5000,
           isClosable: true,
@@ -407,9 +407,9 @@ export default function TraitManagementPage() {
       await waitForTx(txHash);
       toast({
         title: "Success",
-        description: "Trait added successfully.",
+        description: "Trait added successfully. Please wait for page to reload",
         status: "success",
-        duration: 5000,
+        duration: 10000,
         isClosable: true,
       });
       modifyTraitsModal.onClose();
@@ -459,9 +459,9 @@ export default function TraitManagementPage() {
       await waitForTx(txHash as `0x${string}`);
       toast({
         title: "Success",
-        description: "Trait removed successfully.",
+        description: "Trait removed successfully. Please wait for page to reload",
         status: "success",
-        duration: 5000,
+        duration: 10000,
         isClosable: true,
       });
       modifyTraitsModal.onClose();
@@ -514,9 +514,9 @@ export default function TraitManagementPage() {
       await waitForTx(txHash as `0x${string}`);
       toast({
         title: "Success",
-        description: "Traits swapped successfully.",
+        description: "Traits swapped successfully. Please wait for page to reload",
         status: "success",
-        duration: 5000,
+        duration: 10000,
         isClosable: true,
       });
       swapTraitsModal.onClose();
