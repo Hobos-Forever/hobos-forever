@@ -636,13 +636,10 @@ export default function TraitManagementPage() {
     <ChakraProvider theme={theme}>
       <Box minH="100vh" bg="#121212">
         <Container maxW="container.xl" py={4}>
-          <Text fontSize="2xl" fontWeight="bold" color="white" mb={4}>
-            Manage Your NFT Traits
-          </Text>
             <SimpleGrid columns={{ base: 1, md: 3 }} spacing={3}>
             {nfts.map((nft) => (
-              <Box key={nft.id} bg="gray.800" borderRadius="lg" p={3} width="200px" mx="auto">
-              <Checkbox
+                <Box key={nft.id} bg="gray.800" borderRadius="lg" p={3} width="200px" mx="auto">
+                <Checkbox
                 colorScheme="yellow"
                 onChange={() =>
                 setSelectedNFTsForSwap((prev) =>
@@ -653,8 +650,10 @@ export default function TraitManagementPage() {
                 }
                 display="block"
                 mx="auto"
-              />
-              <Image
+                >
+                Swap Traits
+                </Checkbox>
+                <Image
                 key={`${nft.id}-${imageVersion}`}
                 src={`${nft.image}?v=${imageVersion}`}
                 alt={nft.name}
@@ -662,14 +661,14 @@ export default function TraitManagementPage() {
                 height={150}
                 borderRadius="md"
                 mx="auto"
-              />
-              <Text mt={2} fontSize="sm" fontWeight="bold" textAlign="center">
+                />
+                <Text mt={2} fontSize="sm" fontWeight="bold" textAlign="center">
                 {nft.name}
-              </Text>
-              <Button mt={2} size="sm" onClick={() => openTraitModal(nft)} display="block" mx="auto">
+                </Text>
+                <Button mt={2} size="sm" onClick={() => openTraitModal(nft)} display="block" mx="auto">
                 Modify Traits
-              </Button>
-              <Button
+                </Button>
+                <Button
                 mt={2}
                 size="sm"
                 onClick={() => {
@@ -679,10 +678,10 @@ export default function TraitManagementPage() {
                 }}
                 display="block"
                 mx="auto"
-              >
+                >
                 Set Name
-              </Button>
-              </Box>
+                </Button>
+                </Box>
             ))}
             </SimpleGrid>
         </Container>
