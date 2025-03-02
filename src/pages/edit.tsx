@@ -418,7 +418,9 @@ export default function TraitManagementPage() {
       // --- Call updateMetadata API ---
       await callUpdateMetadata(selectedNFT.id);
       setImageVersion(Date.now());
-      window.location.reload();
+      setTimeout(() => {
+        window.location.reload();
+      }, 10000);
     } catch (err) {
       console.error(err);
       toast({
@@ -428,7 +430,9 @@ export default function TraitManagementPage() {
         duration: 5000,
         isClosable: true,
       });
-      window.location.reload();
+      setTimeout(() => {
+        window.location.reload();
+      }, 10000);
     }
   };
 
@@ -465,7 +469,9 @@ export default function TraitManagementPage() {
       fetchAvailableTraits();
       // --- Call updateMetadata API ---
       await callUpdateMetadata(selectedNFT.id);
-      window.location.reload();
+      setTimeout(() => {
+        window.location.reload();
+      }, 10000);
     } catch (err) {
       console.error(err);
       toast({
@@ -475,7 +481,9 @@ export default function TraitManagementPage() {
         duration: 5000,
         isClosable: true,
       });
-      window.location.reload();
+      setTimeout(() => {
+        window.location.reload();
+      }, 10000);
     }
   };
 
@@ -521,7 +529,9 @@ export default function TraitManagementPage() {
       await new Promise((resolve) => setTimeout(resolve, 5000));
       await callUpdateMetadata(tokenIdA);
       await callUpdateMetadata(tokenIdB);
-      window.location.reload();
+      setTimeout(() => {
+        window.location.reload();
+      }, 10000);
     } catch (err) {
       console.error(err);
       toast({
@@ -531,7 +541,9 @@ export default function TraitManagementPage() {
         duration: 5000,
         isClosable: true,
       });
-      window.location.reload();
+      setTimeout(() => {
+        window.location.reload();
+      }, 10000);
     }
   };
 
