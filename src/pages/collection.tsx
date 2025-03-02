@@ -26,6 +26,7 @@ import {
   ChakraProvider,
   extendTheme,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody,
+  Input,
 } from "@chakra-ui/react"
 import { HamburgerIcon, CloseIcon } from "@chakra-ui/icons"
 import Image from "next/image"
@@ -107,9 +108,12 @@ export default function CollectionPage() {
   const [selectedNFT, setSelectedNFT] = useState<NFT | null>(null)
   const [nftOwners, setNftOwners] = useState<{ [key: number]: string }>({})
 
+  // New state for search and pagination
+  const [searchId, setSearchId] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const NFTsPerPage = 18
 
-
-  // Contract calls setup
+  // Contract calls setup for categories (unchanged)
   const categoryCalls = Array.from({ length: 50 }, (_, index) => ({
     address: CONTRACT_ADDRESS as `0x${string}`,
     abi: contractAbi as Abi,
@@ -120,6 +124,16 @@ export default function CollectionPage() {
   const { data: categoryData } = useReadContracts({
     contracts: categoryCalls,
   })
+
+  // --- NFT Data Fetching ---
+  //
+  // When a wallet is connected, we call "getNFTsDetailedForWallet" as before.
+  // When no wallet is connected, we use ERC-721 enumerable methods to fetch:
+  //  1. totalSupply
+  //  2. tokenByIndex for each minted token
+  //  3. tokenURI for each token
+  //  4. identities for each token (to obtain the NFT name, etc.)
+  //
 
   const { data: nftData } = useReadContracts({
     contracts: address
@@ -133,6 +147,70 @@ export default function CollectionPage() {
         ]
       : [],
   })
+
+  // For non-connected case: fetch totalSupply
+  const { data: totalSupplyData } = useReadContracts({
+    contracts: !address
+      ? [
+          {
+            address: CONTRACT_ADDRESS as `0x${string}`,
+            abi: contractAbi as Abi,
+            functionName: "totalSupply",
+            args: [],
+          },
+        ]
+      : [],
+  })
+
+  // Build tokenByIndex calls if no wallet and totalSupply is available
+  const tokenByIndexCalls =
+    !address && totalSupplyData && totalSupplyData[0]?.result
+      ? Array.from(
+          { length: Number(totalSupplyData[0].result) },
+          (_, index) => ({
+            address: CONTRACT_ADDRESS as `0x${string}`,
+            abi: contractAbi as Abi,
+            functionName: "tokenByIndex",
+            args: [index],
+          }),
+        )
+      : []
+
+  const { data: tokenByIndexData } = useReadContracts({
+    contracts: tokenByIndexCalls,
+  })
+
+  // Build tokenURI calls from tokenByIndex results
+  const tokenURIcalls =
+    !address && tokenByIndexData && tokenByIndexData.length > 0
+      ? tokenByIndexData.map((item) => ({
+          address: CONTRACT_ADDRESS as `0x${string}`,
+          abi: contractAbi as Abi,
+          functionName: "tokenURI",
+          args: [item.result],
+        }))
+      : []
+
+  const { data: tokenURIData } = useReadContracts({
+    contracts: tokenURIcalls,
+  })
+
+  // Build identities calls from tokenByIndex results
+  const identityCalls =
+    !address && tokenByIndexData && tokenByIndexData.length > 0
+      ? tokenByIndexData.map((item) => ({
+          address: CONTRACT_ADDRESS as `0x${string}`,
+          abi: contractAbi as Abi,
+          functionName: "identities",
+          args: [item.result],
+        }))
+      : []
+
+  const { data: identityData } = useReadContracts({
+    contracts: identityCalls,
+  })
+
+  // --- End NFT Data Fetching ---
 
   useEffect(() => {
     if (!categoryData) return
@@ -153,39 +231,72 @@ export default function CollectionPage() {
     setLoadingCategories(false)
   }, [categoryData])
 
+  // Fetch NFT metadata – branch depending on whether a wallet is connected
   useEffect(() => {
-    if (!nftData || !Array.isArray(nftData[0]?.result)) return
+    const validateAndFetch = async (tokenId: number, idx: number) => {
+      const tokenURI = !address && tokenURIData && tokenURIData[idx]?.result
+      try {
+        const response = await fetch(`/api/fetchMetadata?tokenId=${tokenId}`)
+        if (!response.ok) throw new Error(`Failed to load metadata for token ${tokenId}`)
+        const metadata = await response.json()
+        return {
+          id: tokenId,
+          name: metadata.name || (identityData && (identityData[idx]?.result as { name: string })?.name) || `NFT #${tokenId}`,
+          image: validateImageUrl(metadata.image),
+          attributes: metadata.attributes || [],
+        }
+      } catch (err) {
+        console.error(`Error fetching metadata for NFT ${tokenId}:`, err)
+        return {
+          id: tokenId,
+          name: (identityData && (identityData[idx]?.result as { name?: string })?.name) || `NFT #${tokenId}`,
+          image: "/placeholder.svg",
+          attributes: [],
+        }
+      }
+    }
 
     const fetchMetadata = async () => {
       try {
-        const fetchedNFTs = await Promise.all(
-          ((nftData[0]?.result as any[]) || []).map(async (nft: any) => {
-            const tokenId = nft.nftId;
-            const tokenURI = `/api/fetchMetadata?tokenId=${tokenId}`
-
-            try {
-              const response = await fetch(tokenURI);
-              if (!response.ok) throw new Error(`Failed to load metadata from token URI for token ${tokenId}`);
-
-              const metadata = await response.json()
-              return {
-                id: tokenId,
-                name: metadata.name || nft.identity.name || `NFT #${tokenId}`,
-                image: validateImageUrl(metadata.image),
-                attributes: metadata.attributes || [],
+        let fetchedNFTs: NFT[] = []
+        if (address) {
+          // Wallet-connected branch: use nftData from getNFTsDetailedForWallet
+          if (!nftData || !Array.isArray(nftData[0]?.result)) return
+          fetchedNFTs = await Promise.all(
+            ((nftData[0]?.result as any[]) || []).map(async (nft: any) => {
+              const tokenId = nft.nftId
+              const tokenURI = `/api/fetchMetadata?tokenId=${tokenId}`
+              try {
+                const response = await fetch(tokenURI)
+                if (!response.ok) throw new Error(`Failed to load metadata for token ${tokenId}`)
+                const metadata = await response.json()
+                return {
+                  id: tokenId,
+                  name: metadata.name || nft.identity.name || `NFT #${tokenId}`,
+                  image: validateImageUrl(metadata.image),
+                  attributes: metadata.attributes || [],
+                }
+              } catch (err) {
+                console.error(`Error fetching metadata for NFT ${tokenId}:`, err)
+                return {
+                  id: tokenId,
+                  name: nft.identity.name || `NFT #${tokenId}`,
+                  image: "/placeholder.svg",
+                  attributes: [],
+                }
               }
-            } catch (err) {
-              console.error(`Error fetching metadata for NFT ${tokenId}:`, err)
-              return {
-                id: tokenId,
-                name: nft.identity.name || `NFT #${tokenId}`,
-                image: "/placeholder.svg",
-                attributes: [],
-              }
-            }
-          }),
-        )
-
+            }),
+          )
+        } else {
+          // No wallet connected: use ERC721Enumerable functions
+          if (!tokenByIndexData || !tokenURIData || !identityData) return
+          fetchedNFTs = await Promise.all(
+            tokenByIndexData.map(async (item, idx) => {
+              const tokenId = Number(item.result)
+              return await validateAndFetch(tokenId, idx)
+            }),
+          )
+        }
         setNfts(fetchedNFTs)
         setFilteredNFTs(fetchedNFTs)
         updateCategoryTraits(fetchedNFTs)
@@ -204,7 +315,7 @@ export default function CollectionPage() {
     }
 
     fetchMetadata()
-  }, [nftData, toast])
+  }, [nftData, tokenByIndexData, tokenURIData, identityData, address, toast])
 
   const validateImageUrl = (url: string | undefined): string => {
     if (!url || typeof url !== "string") return "/placeholder.svg"
@@ -231,20 +342,29 @@ export default function CollectionPage() {
     )
   }
 
+  // Filtering: include "My NFTs" filter and search by NFT ID
   useEffect(() => {
     let filtered = nfts
-  if (selectedTraits["MyNFTs"]) {
-    filtered = filtered.filter((nft) => nftOwners[nft.id] === address);
-  }
-  Object.entries(selectedTraits).forEach(([traitType, value]) => {
-    if (value && traitType !== "MyNFTs") {
-      filtered = filtered.filter((nft) =>
-        nft.attributes.some((attr) => attr.trait_type === traitType && attr.value === value),
-      );
+    if (selectedTraits["MyNFTs"]) {
+      filtered = filtered.filter((nft) => nftOwners[nft.id] === address)
     }
-  });
+    Object.entries(selectedTraits).forEach(([traitType, value]) => {
+      if (value && traitType !== "MyNFTs") {
+        filtered = filtered.filter((nft) =>
+          nft.attributes.some((attr) => attr.trait_type === traitType && attr.value === value),
+        )
+      }
+    })
+    if (searchId.trim() !== "") {
+      filtered = filtered.filter((nft) => nft.id.toString() === searchId.trim())
+    }
     setFilteredNFTs(filtered)
-  }, [selectedTraits, nfts])
+  }, [selectedTraits, nfts, searchId, address, nftOwners])
+
+  // Reset page when filtered NFTs change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filteredNFTs])
 
   const handleTraitSelect = (category: string, trait: string) => {
     setSelectedTraits((prev) => ({
@@ -253,37 +373,35 @@ export default function CollectionPage() {
     }))
   }
 
+  // Owner calls remain the same
   const ownerCalls = nfts.map((nft) => ({
     address: CONTRACT_ADDRESS as `0x${string}`,
     abi: contractAbi as Abi,
     functionName: "ownerOf",
     args: [nft.id],
-  }));
-  
+  }))
+
   const { data: ownerData } = useReadContracts({
     contracts: ownerCalls,
-  });
-  
+  })
+
   useEffect(() => {
-    if (!ownerData) return;
-    
+    if (!ownerData) return
     const owners = ownerData.reduce((acc, result, index) => {
-      const owner = result?.result as string | undefined;
+      const owner = result?.result as string | undefined
       if (owner) {
-        acc[nfts[index].id] = owner;
+        acc[nfts[index].id] = owner
       }
-      return acc;
-    }, {} as { [key: number]: string });
-  
-    setNftOwners(owners);
-  }, [ownerData, nfts]);
-  
+      return acc
+    }, {} as { [key: number]: string })
+    setNftOwners(owners)
+  }, [ownerData, nfts])
 
   const openNFTModal = (nft: NFT) => {
     setSelectedNFT(nft)
     setNFTModalOpen(true)
   }
-  
+
   const closeNFTModal = () => {
     setNFTModalOpen(false)
   }
@@ -308,7 +426,11 @@ export default function CollectionPage() {
         </VStack>
       </CardBody>
     </Card>
-  );
+  )
+
+  // Pagination logic: display 18 NFTs per page
+  const totalPages = Math.ceil(filteredNFTs.length / NFTsPerPage)
+  const displayedNFTs = filteredNFTs.slice((currentPage - 1) * NFTsPerPage, currentPage * NFTsPerPage)
 
   return (
     <ChakraProvider theme={theme}>
@@ -338,22 +460,24 @@ export default function CollectionPage() {
             >
               <CardBody>
                 <VStack align="stretch" spacing={4}>
-                <Button
-    variant={selectedTraits["MyNFTs"] ? "solid" : "ghost"}
-    onClick={() => {
-      setSelectedTraits((prev) => ({
-        ...prev,
-        MyNFTs: prev.MyNFTs ? null : "selected",
-      }));
-    }}
-    color="white"
-  >
-    My NFTs
-  </Button>
+                  {/* Only show My NFTs filter if wallet is connected */}
+                  {address && (
+                    <Button
+                      variant={selectedTraits["MyNFTs"] ? "solid" : "ghost"}
+                      onClick={() => {
+                        setSelectedTraits((prev) => ({
+                          ...prev,
+                          MyNFTs: prev.MyNFTs ? null : "selected",
+                        }))
+                      }}
+                      color="white"
+                    >
+                      My NFTs
+                    </Button>
+                  )}
                   <Text fontSize="xl" fontWeight="bold" color="white">
                     Filters
                   </Text>
- 
                   {loadingCategories ? (
                     <VStack align="stretch" spacing={2}>
                       {[1, 2, 3].map((i) => (
@@ -373,11 +497,7 @@ export default function CollectionPage() {
                           color="whiteAlpha.900"
                         >
                           <Text>{category.name}</Text>
-                          {expandedCategories[category.name] ? (
-                            <CloseIcon boxSize={3} />
-                          ) : (
-                            <HamburgerIcon boxSize={3} />
-                          )}
+                          {expandedCategories[category.name] ? <CloseIcon boxSize={3} /> : <HamburgerIcon boxSize={3} />}
                         </Button>
                         {expandedCategories[category.name] && (
                           <VStack align="stretch" pl={4} mt={2} spacing={1}>
@@ -407,6 +527,13 @@ export default function CollectionPage() {
                 <Button display={{ base: "inline-flex", lg: "none" }} onClick={onOpen} leftIcon={<HamburgerIcon />}>
                   Filters
                 </Button>
+                {/* Search by NFT ID */}
+                <Input
+                  maxW="200px"
+                  placeholder="Search by NFT ID"
+                  value={searchId}
+                  onChange={(e) => setSearchId(e.target.value)}
+                />
               </HStack>
 
               {loadingNFTs ? (
@@ -420,80 +547,89 @@ export default function CollectionPage() {
                   ))}
                 </SimpleGrid>
               ) : (
-                <SimpleGrid columns={{ base: 2, sm: 3, md: 4, lg: 5, xl: 5 }} spacing={3}>
-                  {filteredNFTs.map(renderNFTCard)}
-                </SimpleGrid>
+                <>
+                  <SimpleGrid columns={{ base: 2, sm: 3, md: 4, lg: 5, xl: 5 }} spacing={3}>
+                    {displayedNFTs.map(renderNFTCard)}
+                  </SimpleGrid>
+                  {/* Pagination Controls */}
+                  <Box mt={4} display="flex" justifyContent="center" alignItems="center">
+                    <Button
+                      onClick={() => setCurrentPage((prev) => prev - 1)}
+                      disabled={currentPage === 1}
+                      mr={2}
+                    >
+                      Previous
+                    </Button>
+                    <Text>
+                      {currentPage} / {totalPages || 1}
+                    </Text>
+                    <Button
+                      onClick={() => setCurrentPage((prev) => prev + 1)}
+                      disabled={currentPage === totalPages || totalPages === 0}
+                      ml={2}
+                    >
+                      Next
+                    </Button>
+                  </Box>
+                </>
               )}
             </Box>
           </HStack>
         </Container>
 
-        
         <Modal isOpen={isNFTModalOpen} onClose={closeNFTModal} size="sm">
-        <ModalOverlay />
-        <ModalContent 
-          bg="#1A1A1A" 
-          color="white" 
-          borderRadius="lg" 
-          p={4} 
-          w={{ base: "92%", md: "360px" }} /* Slightly narrower for better readability */
-        >
-          <ModalHeader fontSize="lg" textAlign="center">{selectedNFT?.name}</ModalHeader>
-          <ModalCloseButton />
-
-          <ModalBody>
-            {selectedNFT && (
-        <VStack align="center" spacing={3}>
-          <Box 
-            display="flex" 
-            justifyContent="center" 
-            alignItems="center" 
-            w="full"
+          <ModalOverlay />
+          <ModalContent
+            bg="#1A1A1A"
+            color="white"
+            borderRadius="lg"
+            p={4}
+            w={{ base: "92%", md: "360px" }} /* Slightly narrower for better readability */
           >
-            <Image 
-              src={selectedNFT.image || "/placeholder.svg"} 
-              alt={selectedNFT.name} 
-              width={300} /* 🔥 Larger on tablet screens or bigger */
-              height={300} 
-              style={{ borderRadius: "10px", objectFit: "cover" }} 
-            />
-          </Box>
-
-          <Box textAlign="center" w="full">
-            <HStack justify="center" spacing={1}>
-              <Text fontSize="sm" color="whiteAlpha.700">Owned by:</Text>
-              <Text 
-              fontSize="xs" /* Slightly smaller so it wraps neatly */
-              fontWeight="bold" 
-              wordBreak="break-word" /* Ensures no overflow */
-              textAlign="center"
-              >
-              {nftOwners[selectedNFT.id] ? `${nftOwners[selectedNFT.id].slice(0, 6)}...${nftOwners[selectedNFT.id].slice(-4)}` : "Loading..."}
-              </Text>
-            </HStack>
-          </Box>
-
-          <VStack align="stretch" spacing={1} w="full">
-            {selectedNFT.attributes.map((attr, idx) => (
-              <HStack 
-          key={idx} 
-          justify="space-between" 
-          p={1} 
-          borderBottom="1px solid whiteAlpha.300"
-              >
-          <Text fontSize="sm" fontWeight="medium" color="whiteAlpha.600">
-            {attr.trait_type}
-          </Text>
-          <Text fontSize="sm" fontWeight="bold">{attr.value}</Text>
-              </HStack>
-            ))}
-          </VStack>
-
-        </VStack>
-            )}
-          </ModalBody>
-        </ModalContent>
-      </Modal>
+            <ModalHeader fontSize="lg" textAlign="center">{selectedNFT?.name}</ModalHeader>
+            <ModalCloseButton />
+            <ModalBody>
+              {selectedNFT && (
+                <VStack align="center" spacing={3}>
+                  <Box display="flex" justifyContent="center" alignItems="center" w="full">
+                    <Image
+                      src={selectedNFT.image || "/placeholder.svg"}
+                      alt={selectedNFT.name}
+                      width={300} /* Larger on tablet screens or bigger */
+                      height={300}
+                      style={{ borderRadius: "10px", objectFit: "cover" }}
+                    />
+                  </Box>
+                  <Box textAlign="center" w="full">
+                    <HStack justify="center" spacing={1}>
+                      <Text fontSize="sm" color="whiteAlpha.700">Owned by:</Text>
+                      <Text
+                        fontSize="xs" /* Slightly smaller so it wraps neatly */
+                        fontWeight="bold"
+                        wordBreak="break-word" /* Ensures no overflow */
+                        textAlign="center"
+                      >
+                        {nftOwners[selectedNFT.id]
+                          ? `${nftOwners[selectedNFT.id].slice(0, 6)}...${nftOwners[selectedNFT.id].slice(-4)}`
+                          : "Loading..."}
+                      </Text>
+                    </HStack>
+                  </Box>
+                  <VStack align="stretch" spacing={1} w="full">
+                    {selectedNFT.attributes.map((attr, idx) => (
+                      <HStack key={idx} justify="space-between" p={1} borderBottom="1px solid whiteAlpha.300">
+                        <Text fontSize="sm" fontWeight="medium" color="whiteAlpha.600">
+                          {attr.trait_type}
+                        </Text>
+                        <Text fontSize="sm" fontWeight="bold">{attr.value}</Text>
+                      </HStack>
+                    ))}
+                  </VStack>
+                </VStack>
+              )}
+            </ModalBody>
+          </ModalContent>
+        </Modal>
 
         {/* Mobile Filter Drawer */}
         <Drawer isOpen={isOpen} placement="left" onClose={onClose} size="full">
@@ -544,4 +680,3 @@ export default function CollectionPage() {
     </ChakraProvider>
   )
 }
-
