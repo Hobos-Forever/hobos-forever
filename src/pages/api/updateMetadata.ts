@@ -32,16 +32,13 @@ const publicClient = createPublicClient({
 // Helper: merge dynamic attributes with current metadata attributes.
 function mergeDynamicAttributes(currentAttrs: any[], dynamicMap: Record<string, string>) {
     const updated = currentAttrs.map((attr) => {
-        // If the attribute is one of the dynamic categories, update its value
         if (TRAIT_CONTRACTS.some((t) => t.name === attr.trait_type)) {
-            // If a new value exists in dynamicMap, use it; otherwise, assign "none"
             return { ...attr, value: dynamicMap[attr.trait_type] !== undefined ? dynamicMap[attr.trait_type] : "none" };
         }
         return attr;
     });
     TRAIT_CONTRACTS.forEach(({ name }) => {
         if (!updated.some((attr) => attr.trait_type === name)) {
-            // If no attribute exists for this category, add it with value from dynamicMap if available, else "none"
             updated.push({ trait_type: name, value: dynamicMap[name] !== undefined ? dynamicMap[name] : "none" });
         }
     });
@@ -49,7 +46,7 @@ function mergeDynamicAttributes(currentAttrs: any[], dynamicMap: Record<string, 
 }
 
 // Helper function to fetch on-chain traits for an NFT.
-// If the call fails, we fallback to an array of -1’s (one for each category).
+// If the call fails, fallback to an array of -1’s.
 async function fetchNFTOnChainTraits(nftId: number): Promise<number[]> {
     if (!publicClient) return new Array(TRAIT_CONTRACTS.length).fill(-1);
     try {
@@ -59,7 +56,6 @@ async function fetchNFTOnChainTraits(nftId: number): Promise<number[]> {
             functionName: "getTraitsOnNFT",
             args: [BigInt(nftId)],
         });
-        // Convert each element (likely a BigInt) to number.
         return (result as any).map((x: any) => Number(x));
     } catch (err) {
         console.error("Error fetching on-chain traits, using fallback:", err);
@@ -83,20 +79,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // 1. Fetch existing metadata from your hosting URL.
         const metadataUrl = `${process.env.METADATA_SERVER_URL}${process.env.FTP_METADATA_DIR}${tokenId}.json`;
         let currentMetadata: any = {
-            name: `Hobos Forever #${tokenId}`,
+            name: "",
             image: `${process.env.METADATA_SERVER_URL}images/composite/${tokenId}.png`,
             description: "A dynamic NFT that evolves with on-chain traits and a dynamic XP attribute.",
             attributes: [
-            {
-                "trait_type": "Set status",
-                "value": "1 of 5"
-            },
-            {
-                "trait_type": "XP",
-                "value": 100
-            }
+                { "trait_type": "Set status", "value": "1 of 5" },
+                { "trait_type": "XP", "value": 100 }
             ],
         };
+
         try {
             const resp = await fetch(metadataUrl);
             if (resp.ok) {
@@ -109,11 +100,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             console.error("Error fetching metadata:", e);
         }
 
-        // 2. Read on-chain traits using getTraitsOnNFT.
+        // 2. Determine the name to use:
+        // If newName is provided, use it; otherwise, keep the current name (if any), or fall back to default.
+        const updatedName =
+            newName && newName.trim() !== ""
+                ? `${newName} #${tokenId}`
+                : currentMetadata.name && currentMetadata.name.trim() !== ""
+                    ? currentMetadata.name
+                    : `Hobos Forever #${tokenId}`;
+
+        // 3. Read on-chain traits using getTraitsOnNFT.
         const onChainTraits = await fetchNFTOnChainTraits(tokenId);
         console.log("On-chain traits (converted):", onChainTraits);
 
-        // 3. Build a dynamic map from trait category to trait name.
+        // 4. Build a dynamic map from trait category to trait name.
         const dynamicMap: Record<string, string> = {};
         for (let i = 0; i < TRAIT_CONTRACTS.length; i++) {
             const category = TRAIT_CONTRACTS[i].name;
@@ -127,7 +127,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         functionName: "attributeItems",
                         args: [traitId],
                     })) as any;
-                    // Assume the returned tuple has the trait name at index 1.
                     const traitName = Array.isArray(item) ? item[1] : item.name;
                     dynamicMap[category] = traitName;
                     console.log(`Category ${category} (traitId ${traitId}) -> ${traitName}`);
@@ -140,28 +139,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         console.log("Dynamic map:", dynamicMap);
 
-        // 4. Merge dynamic attributes with current metadata attributes.
+        // 5. Merge dynamic attributes with current metadata attributes.
         const updatedAttributes = mergeDynamicAttributes(currentMetadata.attributes, dynamicMap);
         console.log("Updated attributes:", updatedAttributes);
 
-        // 5. Build updated metadata.
+        // 6. Build updated metadata using updatedName.
         const newMetadata = {
             ...currentMetadata,
-            name: newName && newName.trim() !== "" ? `${newName} #${tokenId}` : `Hobos Forever #${tokenId}`,
+            name: updatedName,
             image: `${process.env.METADATA_SERVER_URL}images/composite/${tokenId}.png`,
             attributes: updatedAttributes,
         };
         console.log("New metadata:", newMetadata);
         const metadataString = JSON.stringify(newMetadata, null, 2);
 
-        // 6. Connect via FTP and upload updated metadata.
-        const client: any = new Client(); // Cast to any to bypass TS issues.
+        // 7. Connect via FTP and upload updated metadata.
+        const client: any = new Client();
         try {
             await client.access({
                 host: process.env.FTP_HOST!,
                 user: process.env.FTP_USER!,
                 password: process.env.FTP_PASS!,
-                secure: false, // Set to false if your server does not support secure connections
+                secure: false,
             });
             console.log("Connected to FTP.");
             const stream = Readable.from([metadataString]);
@@ -179,16 +178,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         try {
             const baseUrl = process.env.BASE_URL || "http://localhost:3000";
-            const updateImageRes = await fetch(`${baseUrl}.netlify/functions/updateImage-background`, {
+            const updateImageRes = await fetch(`${baseUrl}/api/updateImage`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ tokenId }),
             });
             if (!updateImageRes.ok) {
-                console.log("Background function accepted the task.");
+                console.error("updateImage API error:", await updateImageRes.text());
             } else {
-              const text = await updateImageRes.text();
-              console.error("updateImage API error:", text);
+                console.log("updateImage API success:", await updateImageRes.json());
             }
         } catch (err) {
             console.error("Error calling updateImage API:", err);
